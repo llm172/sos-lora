@@ -39,7 +39,7 @@ pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 
 # Download dataset
-huggingface-cli download --repo-type dataset --resume-download corresponding-dataset --local-dir pissa-dataset
+huggingface-cli download --repo-type dataset --resume-download corresponding-dataset --local-dir xxx
 
 ```
 
