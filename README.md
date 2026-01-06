@@ -39,10 +39,8 @@ pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 
 # Download dataset
-huggingface-cli download --repo-type dataset --resume-download fxmeng/pissa-dataset --local-dir pissa-dataset
+huggingface-cli download --repo-type dataset --resume-download corresponding-dataset --local-dir pissa-dataset
 
-# Or use it directly from Hugging Face
-dataset = load_dataset("fxmeng/pissa-dataset", data_dir=task_name, split=split)
 ```
 
 ## Usage
@@ -71,18 +69,6 @@ After training, evaluate the model performance:
 # Results are saved in $OUTPUT_PATH/result.jsonl
 ```
 
-## Configuration
-
-Key hyperparameters for SOS-LoRA:
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `lora_rank` | Rank of the low-rank adapters | 128 |
-| `num_experts` | Number of expert adapters | 4 |
-| `rank_mode` | Rank allocation mode ("total" or "per_expert") | "total" |
-| `lambda_orth` | Orthogonality constraint weight | 0.006 |
-| `gamma_max` | Maximum scaling factor for experts | 2.5 |
-| `gate_temperature` | Temperature for gating mechanism | 2.0 → 1.0 |
 
 ## Advanced Usage
 
