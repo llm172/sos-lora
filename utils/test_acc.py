@@ -102,7 +102,7 @@ def strip_string(string):
 
     # remove percentage
     string = string.replace("\\%", "")
-    string = string.replace("\%", "")  # noqa: W605
+    string = string.replace(r"\%", "")
 
     # " 0." equivalent to " ." and "{0." equivalent to "{." Alternatively, add "0" if "." is the start of the string
     string = string.replace(" .", " 0.")
@@ -186,32 +186,33 @@ def is_number(s):
     return False
 
 def extract_answer_number(completion):
+    if "####" in completion:
+        completion = completion.split("####")[-1]
     text = completion.split('The answer is: ')
     if len(text) > 1:
         extract_ans = text[-1].strip()
-        match = re.search(r'[\-+]?\d*[\.,/]?\d+', extract_ans)
-        if match:
-            if '/' in match.group():
-                denominator = match.group().split('/')[1]
-                numerator = match.group().split('/')[0]
-                if is_number(denominator) == True and is_number(numerator) == True:
-                    if denominator == '0':
-                        return round(float(numerator.replace(',', '')))
-                    else:
-                        frac = Fraction(match.group().replace(',', ''))
-                        num_numerator = frac.numerator
-                        num_denominator = frac.denominator
-                        return round(float(num_numerator / num_denominator))
-                else:
-                    return None
-            else:
-                if float(match.group().replace(',', '')) == float('inf'):
-                    return None
-                return round(float(match.group().replace(',', '')))
-        else:
-            return None
     else:
+        extract_ans = completion.strip()
+
+    matches = re.findall(r'[\-+]?\d*[\.,/]?\d+', extract_ans)
+    if not matches:
         return None
+    match = matches[-1]
+    if '/' in match:
+        denominator = match.split('/')[1]
+        numerator = match.split('/')[0]
+        if is_number(denominator) == True and is_number(numerator) == True:
+            if denominator == '0':
+                return round(float(numerator.replace(',', '')))
+            frac = Fraction(match.replace(',', ''))
+            num_numerator = frac.numerator
+            num_denominator = frac.denominator
+            return round(float(num_numerator / num_denominator))
+        return None
+
+    if float(match.replace(',', '')) == float('inf'):
+        return None
+    return round(float(match.replace(',', '')))
 
 def extract_commonsense_answer(dataset, sentence: str) -> float:
     if dataset == 'boolq':

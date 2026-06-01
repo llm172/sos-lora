@@ -133,7 +133,9 @@ class GateMean1WithUniformPrior(torch.autograd.Function):
         return grad_logits.to(dtype=out_dtype), None, None
 
 
-# ============================================================# 3) SOS-LoRA layer# ============================================================
+# ============================================================
+# 3) SOS-LoRA layer
+# ============================================================
 class SOSLoRALayer(nn.Module):
     def __init__(
         self,
@@ -154,6 +156,17 @@ class SOSLoRALayer(nn.Module):
         loraplus_lr_ratio: float = 1.0,
     ):
         super().__init__()
+        if not isinstance(base_layer, nn.Linear):
+            raise TypeError(f"SOSLoRALayer expects nn.Linear, got {type(base_layer)!r}")
+        if int(num_experts) <= 0:
+            raise ValueError(f"num_experts must be positive, got {num_experts}")
+        if int(r) <= 0:
+            raise ValueError(f"rank must be positive, got {r}")
+        if float(alpha) <= 0:
+            raise ValueError(f"alpha must be positive, got {alpha}")
+        if not (0.0 <= float(dropout) < 1.0):
+            raise ValueError(f"dropout must be in [0, 1), got {dropout}")
+
         self.base_layer = base_layer
         self.in_features = base_layer.in_features
         self.out_features = base_layer.out_features
@@ -162,6 +175,8 @@ class SOSLoRALayer(nn.Module):
         self.rank_mode = str(rank_mode)
         self.dropout = nn.Dropout(p=float(dropout))
         self.dropout_position = str(dropout_position)
+        if self.dropout_position not in {"preA", "postA"}:
+            raise ValueError(f"dropout_position must be 'preA' or 'postA', got {dropout_position!r}")
 
         self.register_buffer("current_lambda", torch.tensor(0.0, dtype=torch.float32))
         self.register_buffer("gate_temperature", torch.tensor(float(gate_temperature_start), dtype=torch.float32))
@@ -175,12 +190,16 @@ class SOSLoRALayer(nn.Module):
                     f"rank_mode=total requires r_tot divisible by num_experts, got r_tot={self.r_tot}, K={self.num_experts}"
                 )
             self.r = self.r_tot // self.num_experts
-        else:
+        elif self.rank_mode == "expert":
             self.r = int(r)
             self.r_tot = self.r * self.num_experts
+        else:
+            raise ValueError(f"rank_mode must be 'total' or 'expert', got {rank_mode!r}")
 
         # Multi-scale prior
-        gamma = torch.linspace(1.0, float(gamma_max), steps=self.num_experts)
+        if float(gamma_max) < 1.0:
+            raise ValueError(f"gamma_max must be >= 1.0, got {gamma_max}")
+        gamma = torch.linspace(1.0, float(gamma_max), steps=self.num_experts, dtype=torch.float32)
         if normalize_scales is None:
             normalize_scales = (self.rank_mode == "total")
         if normalize_scales:
@@ -189,9 +208,10 @@ class SOSLoRALayer(nn.Module):
         scale_base = str(scale_base).lower()
         if scale_base == "total":
             base_scaling = float(alpha) / float(self.r_tot)
-        else:
-            # keep your SOTA-strength base scaling
+        elif scale_base == "expert":
             base_scaling = float(alpha) / float(self.r)
+        else:
+            raise ValueError(f"scale_base must be 'total' or 'expert', got {scale_base!r}")
 
         base_scales = (gamma * base_scaling).unsqueeze(1).repeat(1, self.out_features)  # [K,out]
         self.register_buffer("base_scales", base_scales)
@@ -213,7 +233,7 @@ class SOSLoRALayer(nn.Module):
         init = init - init.mean()
         self.lora_gate_logits = nn.Parameter(init)
 
-        # LoRA weights: A diverse dirs, B=0 => deltaW=0 at init (paper-friendly & stable) :contentReference[oaicite:3]{index=3}
+        # A starts with diverse directions and B=0, so the adapter update is exactly zero at initialization.
         self.lora_A = nn.Parameter(torch.empty(self.num_experts, self.r, self.in_features))
         self.lora_B = nn.Parameter(torch.empty(self.num_experts, self.out_features, self.r))
 
@@ -270,15 +290,14 @@ class SOSLoRALayer(nn.Module):
         device = self.lora_A.device
         dtype = self.lora_A.dtype
 
-        g = self._gate_mean1(dtype, device)  # [K]
-        scales = self.expert_scales.to(device=device, dtype=dtype) * g.unsqueeze(1)  # [K,out]
-
-        delta_w = torch.zeros(self.out_features, self.in_features, device=device, dtype=dtype)
-        for i in range(self.num_experts):
-            scaled_B = self.lora_B[i].to(device=device, dtype=dtype) * scales[i].unsqueeze(1)  # [out,r]
-            delta_w += torch.matmul(scaled_B, self.lora_A[i].to(device=device, dtype=dtype))    # [out,in]
-
         with torch.no_grad():
+            g = self._gate_mean1(dtype, device)  # [K]
+            scales = self.expert_scales.to(device=device, dtype=dtype) * g.unsqueeze(1)  # [K,out]
+
+            delta_w = torch.zeros(self.out_features, self.in_features, device=device, dtype=dtype)
+            for i in range(self.num_experts):
+                scaled_B = self.lora_B[i].to(device=device, dtype=dtype) * scales[i].unsqueeze(1)  # [out,r]
+                delta_w += torch.matmul(scaled_B, self.lora_A[i].to(device=device, dtype=dtype))    # [out,in]
             self.base_layer.weight.data += delta_w.to(self.base_layer.weight.dtype)
         return self.base_layer
 
@@ -319,6 +338,25 @@ def inject_soslora(model: nn.Module, target_modules: Iterable[str], **kwargs) ->
             p.requires_grad = False
 
     return model
+
+
+def collect_soslora_state(model: nn.Module) -> dict:
+    model_inner = model.module if hasattr(model, "module") else model
+    payload = {}
+    for name, module in model_inner.named_modules():
+        if isinstance(module, SOSLoRALayer):
+            payload[name] = {
+                "lora_A": module.lora_A.detach().cpu(),
+                "lora_B": module.lora_B.detach().cpu(),
+                "expert_scales": module.expert_scales.detach().cpu(),
+                "base_scales": module.base_scales.detach().cpu(),
+                "gate_logits": module.lora_gate_logits.detach().cpu(),
+                "gate_temperature": float(module.gate_temperature.detach().cpu()),
+                "r": module.r,
+                "r_tot": module.r_tot,
+                "num_experts": module.num_experts,
+            }
+    return payload
 
 
 # ============================================================
@@ -569,7 +607,12 @@ def train():
     )
     trainer.train()
 
-    if script_args.merge and script_args.local_rank == 0:
+    if trainer.is_world_process_zero():
+        import os
+        os.makedirs(script_args.output_dir, exist_ok=True)
+        torch.save(collect_soslora_state(trainer.model), os.path.join(script_args.output_dir, "sos_adapters.pt"))
+
+    if script_args.merge and trainer.is_world_process_zero():
         save_path = script_args.output_dir
         model_to_save = trainer.model.module if hasattr(trainer.model, "module") else trainer.model
         for name, module in list(model_to_save.named_modules()):

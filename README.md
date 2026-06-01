@@ -1,15 +1,20 @@
-# SOS-LoRA: Scalable and Orthogonal Subspace Low-Rank Adaptation
+# SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling
+
+> **ACL 2026 Main Conference.** This repository contains the official implementation of the ACL 2026 main-conference paper **"SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling"**.
+
+**Authors:** Yupeng Chang, Yuan Wu, Yi Chang  
+**Code:** https://github.com/llm172/sos-lora
 
 ## Introduction
 
-We introduce SOS-LoRA, a novel parameter-efficient fine-tuning (PEFT) method that enhances the performance of large language models through scalable and orthogonal subspace adaptation. SOS-LoRA addresses the limitations of traditional LoRA by leveraging multiple expert adapters with orthogonal constraints, enabling more efficient and effective parameter utilization.
+We introduce SOS-LoRA, a parameter-efficient fine-tuning (PEFT) method that improves LoRA under a fixed total rank budget. SOS-LoRA decomposes a single low-rank update into multiple static, always-on experts, assigns them fixed multi-scale factors, and encourages cross-expert diversity through orthogonal input-side directions. The trained experts can be merged back into the base model, so inference uses the same architecture and has no additional adapter latency after merging.
 
 Key features of SOS-LoRA:
-- Parameter-efficient fine-tuning with orthogonal subspace constraints
-- Multiple expert adapters for scalable adaptation
-- Fast convergence with improved performance
-- Compatibility with various model architectures
-- Support for quantization and deepspeed training
+- Static multi-expert LoRA decomposition under a matched rank budget
+- Fixed multi-scale scaling for scale-separated optimization dynamics
+- Cross-expert orthogonal initialization and lightweight regularization
+- Mergeable adapters with no additional inference-time latency after merging
+- Support for Hugging Face Transformers, DeepSpeed training, and vLLM evaluation
 
 ## Installation
 
@@ -21,8 +26,8 @@ Key features of SOS-LoRA:
 ### Setup
 
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+git clone https://github.com/llm172/sos-lora.git
+cd sos-lora
 
 # Create and activate conda environment
 conda create -n sos-lora python=3.10
@@ -38,16 +43,13 @@ conda install pytorch==2.4.0 torchvision=0.19.0 pytorch-cuda=12.1 -c pytorch -c 
 pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 
-# Download dataset
-huggingface-cli download --repo-type dataset --resume-download corresponding-dataset --local-dir xxx
-
 ```
 
 ## Usage
 
 ### Training
 
-Run the training script for SOS-LoRA:
+Run the MetaMath training script for SOS-LoRA:
 
 ```bash
 # Set environment variables (optional)
@@ -60,6 +62,8 @@ export SEED=1024
 sh scripts/metamath_llama2_7b/run_sos-lora.sh
 ```
 
+The script trains SOS-LoRA, merges the learned update into the base model when `--merge True`, and then runs the bundled GSM8K-style generation/evaluation pipeline.
+
 ### Evaluation
 
 After training, evaluate the model performance:
@@ -67,6 +71,15 @@ After training, evaluate the model performance:
 ```bash
 # The evaluation is automatically run after training
 # Results are saved in $OUTPUT_PATH/result.jsonl
+```
+
+You can also run the maintained evaluation utilities manually:
+
+```bash
+python inference.py --model "$OUTPUT_PATH"
+python utils/gen_vllm.py --model "$OUTPUT_PATH" --data_path "$DATA_PATH" --sub_task metamath --output_file "$OUTPUT_PATH/result.jsonl"
+python utils/test_acc.py --input_file "$OUTPUT_PATH/result.jsonl"
+python run_harness.py --model "$OUTPUT_PATH" --tasks gsm8k --batch_size 4
 ```
 
 
@@ -85,6 +98,10 @@ sh scripts/metamath_llama2_7b/run_sos-lora.sh
 
 To train with a custom dataset, modify the `DATA_PATH` and `sub_task` parameter in the training script.
 
+### Recommended Defaults
+
+For the MetaMath Llama 2-7B setup, the maintained default is `K=4`, `rank_mode=total`, `gamma_max=2.5`, delayed/ramped orthogonal regularization, mild scale anchoring, and LoRA+-style A-gradient scaling. These defaults preserve the paper's static, mergeable design while providing a slightly stronger and more stable training recipe for high-rank math fine-tuning.
+
 ## Code Structure
 
 ```
@@ -93,9 +110,22 @@ To train with a custom dataset, modify the `DATA_PATH` and `sub_task` parameter 
 │   └── metamath_llama2_7b/
 │       └── run_sos-lora.sh  # Main training script for SOS-LoRA
 ├── utils/                # Utility functions
+├── inference.py          # Quick inference with a merged SOS-LoRA model
+├── run_harness.py        # lm-evaluation-harness entry point
 ├── train_sos-lora.py     # Main training code for SOS-LoRA
 ├── requirements.txt      # Dependencies
 └── README.md             # This file
+```
+
+## Citation
+
+```bibtex
+@inproceedings{chang2026soslora,
+  title = {SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling},
+  author = {Chang, Yupeng and Wu, Yuan and Chang, Yi},
+  booktitle = {Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics},
+  year = {2026}
+}
 ```
 
 ## License
