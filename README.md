@@ -3,7 +3,6 @@
 > **ACL 2026 Main Conference.** This repository contains the official implementation of the ACL 2026 main-conference paper **"SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling"**.
 
 **Authors:** Yupeng Chang, Yuan Wu, Yi Chang  
-**Code:** https://github.com/llm172/sos-lora
 
 ## Introduction
 
