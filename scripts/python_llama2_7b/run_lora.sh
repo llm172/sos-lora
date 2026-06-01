@@ -31,7 +31,7 @@ deepspeed --master_port=16971 --include=localhost:0,1,2,3,4,5,6,7 train.py \
     --logging_steps 1 \
     --lr_scheduler_type "cosine" \
     --report_to "tensorboard" \
-    --merge True \
+    --merge True
 
-python utils/gen_vllm.py --model $OUTPUT_PATH --sub_task python --output_file $OUTPUT_PATH/python_response.jsonl
+python utils/gen_vllm.py --model $OUTPUT_PATH --data_path $DATA_PATH --sub_task python --output_file $OUTPUT_PATH/python_response.jsonl
 python utils/test_acc.py --input_file $OUTPUT_PATH/python_response.jsonl

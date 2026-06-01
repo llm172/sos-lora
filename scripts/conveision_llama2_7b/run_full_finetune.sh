@@ -27,4 +27,4 @@ deepspeed --master_port=16971 --include=localhost:0,1,2,3,4,5,6,7 train.py \
     --warmup_ratio 0.03 \
     --logging_steps 1 \
     --lr_scheduler_type "cosine" \
-    --report_to "tensorboard" \
+    --report_to "tensorboard"

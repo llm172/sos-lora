@@ -3,6 +3,7 @@
 > **ACL 2026 Main Conference.** This repository contains the official implementation of the ACL 2026 main-conference paper **"SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling"**.
 
 **Authors:** Yupeng Chang, Yuan Wu, Yi Chang  
+**Code:** https://github.com/llm172/sos-lora
 
 ## Introduction
 
@@ -116,6 +117,16 @@ For the MetaMath Llama 2-7B setup, the maintained default is `K=4`, `rank_mode=t
 └── README.md             # This file
 ```
 
+## Citation
+
+```bibtex
+@inproceedings{chang2026soslora,
+  title = {SOS-LoRA: Static Orthogonal-Subspace Low-Rank Adaptation with Fixed Multi-Scale Scaling},
+  author = {Chang, Yupeng and Wu, Yuan and Chang, Yi},
+  booktitle = {Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics},
+  year = {2026}
+}
+```
 
 ## License
 

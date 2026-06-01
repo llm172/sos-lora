@@ -27,9 +27,9 @@ deepspeed --master_port=16971 --include=localhost:0,1,2,3,4,5,6,7 train.py \
     --warmup_ratio 0.03 \
     --logging_steps 1 \
     --lr_scheduler_type "cosine" \
-    --report_to "tensorboard" \
+    --report_to "tensorboard"
 
-python utils/gen_vllm.py --model $OUTPUT_PATH --sub_task python --output_file $OUTPUT_PATH/python_response.jsonl
+python utils/gen_vllm.py --model $OUTPUT_PATH --data_path $DATA_PATH --sub_task python --output_file $OUTPUT_PATH/python_response.jsonl
 python utils/code_process.py --path $OUTPUT_PATH/python_response.jsonl
 evalplus.evaluate --dataset humaneval --samples $OUTPUT_PATH/humaneval.jsonl
 evalplus.evaluate --dataset mbpp --samples $OUTPUT_PATH/mbpp.jsonl

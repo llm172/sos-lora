@@ -27,7 +27,7 @@ deepspeed --master_port=16971 --include=localhost:0,1,2,3,4,5,6,7 train.py \
     --warmup_ratio 0.03 \
     --logging_steps 1 \
     --lr_scheduler_type "cosine" \
-    --report_to "tensorboard" \
+    --report_to "tensorboard"
 
-python utils/gen_vllm.py --model $OUTPUT_PATH --sub_task metamath --output_file $OUTPUT_PATH/metamath_response.jsonl
+python utils/gen_vllm.py --model $OUTPUT_PATH --data_path $DATA_PATH --sub_task metamath --output_file $OUTPUT_PATH/metamath_response.jsonl
 python utils/test_acc.py --input_file $OUTPUT_PATH/metamath_response.jsonl
